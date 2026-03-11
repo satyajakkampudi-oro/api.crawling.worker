@@ -1,0 +1,76 @@
+import type { AppEnv } from "./types/env-types.js";
+import { cors } from "hono/cors";
+
+import { HTTPException } from "hono/http-exception";
+import factory from "./factory.js";
+import { requestId } from "./middlewares/request-id.js";
+import scrapeRouter from "./routes/scrape-router.js";
+import { processQueueMessage } from "./services/queue-processor.js";
+
+const app = factory.createApp();
+
+// ── Global middleware ─────────────────────────────────────────────────────────
+app.use("*", cors());
+app.use("*", requestId);
+
+// ── Routes ────────────────────────────────────────────────────────────────────
+app.route("/v1", scrapeRouter);
+
+// ── Error handling ────────────────────────────────────────────────────────────
+app.onError((err, c) => {
+  if (err instanceof HTTPException) {
+    return c.json(
+      {
+        success: false,
+        message: err.message,
+        requestId: c.var.requestId,
+      },
+      err.status,
+    );
+  }
+
+  console.error("[WORKER] Unhandled error:", {
+    message: err.message,
+    requestId: c.var.requestId,
+    stack: err.stack,
+  });
+
+  return c.json(
+    {
+      success: false,
+      message: "Internal server error",
+      requestId: c.var.requestId,
+    },
+    500,
+  );
+});
+
+app.notFound((c) => {
+  return c.json(
+    {
+      success: false,
+      message: `Route not found: ${c.req.method} ${c.req.path}`,
+      requestId: c.var.requestId,
+    },
+    404,
+  );
+});
+
+// ── Worker export ─────────────────────────────────────────────────────────────
+export default {
+  async fetch(request: Request, env: AppEnv["Bindings"], ctx: ExecutionContext): Promise<Response> {
+    return app.fetch(request, env, ctx);
+  },
+
+  async queue(batch: MessageBatch<unknown>, env: AppEnv["Bindings"]): Promise<void> {
+    console.warn("[QUEUE] Batch received", {
+      queue: batch.queue,
+      messageCount: batch.messages.length,
+      timestamp: new Date().toISOString(),
+    });
+
+    for (const message of batch.messages) {
+      await processQueueMessage(message, env);
+    }
+  },
+};
