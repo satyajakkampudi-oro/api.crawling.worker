@@ -42,3 +42,13 @@ export interface SingleScrapeOptions {
 }
 
 export type ScrapeStatus = "completed" | "partial" | "failed";
+
+export interface BatchJobResponse {
+  jobId: string;
+  mode: "async" | "sync";
+  status: string;
+  urlCount: number;
+  successCount: number | null;
+  failedCount: number | null;
+  results: ScrapeResult[] | null;
+}

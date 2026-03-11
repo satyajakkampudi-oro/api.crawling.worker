@@ -10,15 +10,18 @@ export interface AppEnv {
     requestId: string;
   };
   Bindings: {
-    // ── Queue bindings ────────────────────────────────────────────
+    // Queue bindings
     SCRAPE_JOB_QUEUE: Queue;
 
-    // ── Provider API keys ────────────────────────────────────────
+    // KV bindings
+    SCRAPE_JOB_STORE: KVNamespace;
+
+    // Provider API keys
     SCRAPINGBEE_API_KEY: string;
     SCRAPINGANT_API_KEY: string;
     FIRECRAWL_API_KEY: string;
 
-    // ── Provider tuning (all strings — CF Workers env vars) ──────
+    // Provider tuning (all strings — CF Workers env vars)
     SCRAPINGANT_BASE_URL: string;
     SCRAPINGBEE_CONCURRENCY: string;
     SCRAPINGBEE_WAIT_MS: string;
@@ -28,19 +31,19 @@ export interface AppEnv {
     FIRECRAWL_MAX_CONCURRENCY: string;
     FIRECRAWL_POLL_INTERVAL_MS: string;
 
-    // ── Service auth ─────────────────────────────────────────────
+    // Service auth
     SERVICE_TOKEN: string;
 
-    // ── Webhook ──────────────────────────────────────────────────
+    // Webhook
     WEBHOOK_SECRET: string;
     WEBHOOK_MAX_RETRIES: string;
     WEBHOOK_RETRY_BASE_MS: string;
 
-    // ── Routing ──────────────────────────────────────────────────
+    // Routing
     DEFAULT_PROVIDER: string;
     SYNC_BATCH_THRESHOLD: string;
 
-    // ── App ──────────────────────────────────────────────────────
+    // App
     ENVIRONMENT: string;
   };
 }

@@ -7,10 +7,16 @@
   "env": {
     "development": {
       "name": "dev-api-scraping",
+      "kv_namespaces": [
+        {
+          "binding": "SCRAPE_JOB_STORE",
+          "id": "dev-scrape-job-store"
+        }
+      ],
       "vars": {
         "ENVIRONMENT": "development",
         "DEFAULT_PROVIDER": "ant",
-        "SYNC_BATCH_THRESHOLD": "10",
+        "SYNC_BATCH_THRESHOLD": "3",
         "SCRAPINGANT_BASE_URL": "https://api.scrapingant.com",
         "SCRAPINGBEE_CONCURRENCY": "1",
         "SCRAPINGBEE_WAIT_MS": "3000",
@@ -48,10 +54,16 @@
     },
     "staging": {
       "name": "staging-api-scraping",
+      "kv_namespaces": [
+        {
+          "binding": "SCRAPE_JOB_STORE",
+          "id": "staging-scrape-job-store"
+        }
+      ],
       "vars": {
         "ENVIRONMENT": "staging",
         "DEFAULT_PROVIDER": "ant",
-        "SYNC_BATCH_THRESHOLD": "10",
+        "SYNC_BATCH_THRESHOLD": "3",
         "SCRAPINGANT_BASE_URL": "https://api.scrapingant.com",
         "SCRAPINGBEE_CONCURRENCY": "1",
         "SCRAPINGBEE_WAIT_MS": "3000",

@@ -6,7 +6,7 @@ import { computeBackoffMs, isRetryableStatus } from "../helpers/error-mapping-he
 import { sleep } from "../helpers/retry-helper.js";
 import { buildScrapeResult } from "../helpers/scrape-result-helper.js";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// Types
 
 interface PdfScrapeOptions {
   url: string;
@@ -20,7 +20,7 @@ interface PdfFetchResult {
   statusCode: number;
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
+//  Public API
 
 /**
  * Fetches a PDF by URL, encodes its bytes as base64, and returns a ScrapeResult.
@@ -65,7 +65,7 @@ export async function scrapePdfUrl(options: PdfScrapeOptions): Promise<ScrapeRes
   });
 }
 
-// ── Private ───────────────────────────────────────────────────────────────────
+// Private
 
 async function fetchPdfBytes(url: string, timeoutMs: number): Promise<PdfFetchResult> {
   const response = await fetch(url, {

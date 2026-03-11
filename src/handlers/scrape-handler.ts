@@ -1,5 +1,4 @@
 import type { Context } from "hono";
-
 import type { AppEnv } from "../types/env-types.js";
 
 import {
@@ -9,158 +8,90 @@ import {
   MSG_SCRAPE_QUEUED,
 } from "../constants/scrape-messages.js";
 
-import { deriveScrapeStatus } from "../helpers/scrape-result-helper.js";
-
-import { determineBatchMode, runBatchScrape } from "../services/batch-scrape-service.js";
-
-import { mapDomainUrls } from "../services/domain-map-service.js";
+import { determineBatchMode, enqueueBatchJob, runSyncBatchScrape } from "../services/batch-scrape-service.js";
+import { enqueueDomainJob, mapDomainUrls } from "../services/domain-map-service.js";
 import { scrapePdfUrl } from "../services/pdf-scrape-service.js";
-
 import { resolveConcurrency, resolveSingleProvider, scrapeSingleUrl } from "../services/single-scrape-service.js";
-
-import { deliverScrapeResult, resolveWebhookConfig } from "../services/webhook-delivery-service.js";
 
 import { sendResponse } from "../utils/send-response.js";
 
 import { batchScrapeSchema } from "../validations/schema/v-batch-scrape-schema.js";
 import { domainMapSchema, domainScrapeSchema } from "../validations/schema/v-domain-map-schema.js";
-
 import { pdfScrapeSchema } from "../validations/schema/v-pdf-scrape-schema.js";
 import { singleScrapeSchema } from "../validations/schema/v-single-scrape-schema.js";
-
 import { validateRequest } from "../validations/validate-request.js";
 
-// Single URL scrape
+//  Single URL scrape
 
 export async function handleSingleScrape(c: Context<AppEnv>): Promise<Response> {
-  const reqBody = await c.req.json();
-  const body = await validateRequest(reqBody, singleScrapeSchema);
-
+  const body = await validateRequest(await c.req.json(), singleScrapeSchema);
   const provider = resolveSingleProvider(body.provider, c.env.DEFAULT_PROVIDER);
 
   const result = await scrapeSingleUrl(
-    {
-      url: body.url,
-      provider,
-      waitMs: body.waitMs ?? 3000,
-      useBrowser: body.useBrowser,
-      maxRetries: body.maxRetries ?? 2,
-      metadata: body.metadata,
-    },
+    { url: body.url, provider, waitMs: body.waitMs ?? 3000, useBrowser: body.useBrowser, maxRetries: body.maxRetries ?? 2, metadata: body.metadata },
     c.env,
   );
 
   return sendResponse(c, 200, MSG_SCRAPE_COMPLETE, result);
 }
 
-// Batch scrape
+//  Batch scrape
 
 export async function handleBatchScrape(c: Context<AppEnv>): Promise<Response> {
-  const reqBody = await c.req.json();
-  const body = await validateRequest(reqBody, batchScrapeSchema);
-
+  const body = await validateRequest(await c.req.json(), batchScrapeSchema);
   const provider = resolveSingleProvider(body.provider, c.env.DEFAULT_PROVIDER);
   const concurrency = resolveConcurrency(body.concurrency, c.env.SCRAPINGANT_CONCURRENCY);
   const mode = determineBatchMode(body.urls.length, body.webhookUrl, c.env.SYNC_BATCH_THRESHOLD);
-  const triggeredAt = new Date().toISOString();
   const jobId = crypto.randomUUID();
-
-  //  Async path: enqueue and return immediately
-  if (mode === "async") {
-    await c.env.SCRAPE_JOB_QUEUE.send({
-      jobId,
-      triggeredAt,
-      urls: body.urls,
-      provider,
-      concurrency,
-      waitMs: body.waitMs,
-      useBrowser: body.useBrowser,
-      maxRetries: body.maxRetries,
-      webhookUrl: body.webhookUrl,
-      metadata: body.metadata,
-    });
-
-    return sendResponse(c, 202, MSG_SCRAPE_QUEUED, {
-      jobId,
-      urlCount: body.urls.length,
-      mode: "async",
-    });
-  }
-
-  // Sync path: scrape inline and return results
-  const results = await runBatchScrape(
-    {
-      urls: body.urls,
-      provider,
-      concurrency,
-      waitMs: body.waitMs,
-      useBrowser: body.useBrowser,
-      maxRetries: body.maxRetries,
-      metadata: body.metadata,
-    },
-    c.env,
-  );
-
-  // Fire-and-forget webhook delivery (non-blocking)
-  if (body.webhookUrl !== undefined) {
-    const webhookConfig = resolveWebhookConfig(c.env);
-    c.executionCtx.waitUntil(
-      deliverScrapeResult({
-        jobId,
-        webhookUrl: body.webhookUrl,
-        results,
-        metadata: body.metadata,
-        triggeredAt,
-        webhookSecret: webhookConfig.secret,
-        maxRetries: webhookConfig.maxRetries,
-        retryBaseMs: webhookConfig.retryBaseMs,
-      }),
-    );
-  }
-
-  return sendResponse(c, 200, MSG_SCRAPE_COMPLETE, {
+  const triggeredAt = new Date().toISOString();
+  const jobOptions = {
     jobId,
-    status: deriveScrapeStatus(results),
-    results,
-    successCount: results.filter(r => r.markdown !== null).length,
-    failedCount: results.filter(r => r.markdown === null).length,
-  });
+    triggeredAt,
+    urls: body.urls,
+    provider,
+    concurrency,
+    waitMs: body.waitMs,
+    useBrowser: body.useBrowser,
+    // Sync path: no retries — fail fast to stay within 30s wall-clock limit.
+    // Retries only make sense on the async queue worker which has no time limit.
+    maxRetries: mode === "sync" ? 0 : (body.maxRetries ?? 2),
+    webhookUrl: body.webhookUrl,
+    metadata: body.metadata,
+  };
+
+  if (mode === "async") {
+    const data = await enqueueBatchJob(c.env, jobOptions);
+    return sendResponse(c, 202, MSG_SCRAPE_QUEUED, data);
+  }
+
+  const data = await runSyncBatchScrape(c.executionCtx, c.env, jobOptions);
+  return sendResponse(c, 200, MSG_SCRAPE_COMPLETE, data);
 }
 
 //  Domain URL map
 
 export async function handleDomainMap(c: Context<AppEnv>): Promise<Response> {
-  const reqBody = await c.req.json();
-  const body = await validateRequest(reqBody, domainMapSchema);
+  const body = await validateRequest(await c.req.json(), domainMapSchema);
 
   const result = await mapDomainUrls(
-    {
-      domain: body.domain,
-      maxUrls: body.maxUrls,
-      includeSubdomains: body.includeSubdomains,
-      apiKey: c.env.FIRECRAWL_API_KEY,
-      timeoutMs: 20_000,
-    },
+    { domain: body.domain, maxUrls: body.maxUrls, includeSubdomains: body.includeSubdomains, apiKey: c.env.FIRECRAWL_API_KEY, timeoutMs: 20_000 },
     c.env,
   );
 
   return sendResponse(c, 200, MSG_DOMAIN_MAPPED, result);
 }
 
-// Full domain scrape (always async)
+//  Domain scrape (always async)
 
 export async function handleDomainScrape(c: Context<AppEnv>): Promise<Response> {
-  const reqBody = await c.req.json();
-  const body = await validateRequest(reqBody, domainScrapeSchema);
-
+  const body = await validateRequest(await c.req.json(), domainScrapeSchema);
   const provider = resolveSingleProvider(body.provider, c.env.DEFAULT_PROVIDER);
   const jobId = crypto.randomUUID();
   const triggeredAt = new Date().toISOString();
 
-  await c.env.SCRAPE_JOB_QUEUE.send({
+  const data = await enqueueDomainJob(c.env, {
     jobId,
     triggeredAt,
-    type: "domain-scrape",
     domain: body.domain,
     provider,
     maxUrls: body.maxUrls,
@@ -172,25 +103,15 @@ export async function handleDomainScrape(c: Context<AppEnv>): Promise<Response> 
     metadata: body.metadata,
   });
 
-  return sendResponse(c, 202, MSG_SCRAPE_QUEUED, {
-    jobId,
-    domain: body.domain,
-    mode: "async",
-  });
+  return sendResponse(c, 202, MSG_SCRAPE_QUEUED, data);
 }
 
 //  PDF scrape
 
 export async function handlePdfScrape(c: Context<AppEnv>): Promise<Response> {
-  const reqBody = await c.req.json();
-  const body = await validateRequest(reqBody, pdfScrapeSchema);
+  const body = await validateRequest(await c.req.json(), pdfScrapeSchema);
 
-  const result = await scrapePdfUrl({
-    url: body.url,
-    maxRetries: body.maxRetries,
-    timeoutMs: body.timeoutMs,
-    metadata: body.metadata,
-  });
+  const result = await scrapePdfUrl({ url: body.url, maxRetries: body.maxRetries, timeoutMs: body.timeoutMs, metadata: body.metadata });
 
   return sendResponse(c, 200, MSG_PDF_SCRAPED, result);
 }

@@ -1,8 +1,10 @@
-import type { AppEnv } from "../types/env-types.js";
+import type { AppEnv, ProviderName } from "../types/env-types.js";
+import type { ScrapeMetadata } from "../types/scrape-types.js";
 
 import { HTTPException } from "hono/http-exception";
 
 import { deduplicateUrls, filterValidUrls, normaliseBaseUrl } from "../helpers/url-helper.js";
+import { createJobRecord } from "./job-store-service.js";
 
 interface DomainMapOptions {
   domain: string;
@@ -54,6 +56,55 @@ export async function mapDomainUrls(
     urls: deduplicated,
     total: deduplicated.length,
   };
+}
+
+/**
+ * Persists the job record in KV and sends the domain-scrape message to the queue.
+ * urlCount is 0 at enqueue time — updated by the queue worker after domain discovery.
+ */
+export async function enqueueDomainJob(
+  env: AppEnv["Bindings"],
+  options: {
+    jobId: string;
+    triggeredAt: string;
+    domain: string;
+    provider: ProviderName;
+    maxUrls: number;
+    concurrency: number;
+    waitMs: number;
+    useBrowser: boolean;
+    maxRetries: number;
+    webhookUrl: string;
+    metadata: ScrapeMetadata;
+  },
+): Promise<{ jobId: string; domain: string; mode: "async" }> {
+  await createJobRecord(env.SCRAPE_JOB_STORE, {
+    jobId: options.jobId,
+    type: "domain-scrape",
+    provider: options.provider,
+    triggeredAt: options.triggeredAt,
+    urlCount: 0,
+    domain: options.domain,
+    webhookUrl: options.webhookUrl,
+    metadata: options.metadata,
+  });
+
+  await env.SCRAPE_JOB_QUEUE.send({
+    jobId: options.jobId,
+    triggeredAt: options.triggeredAt,
+    type: "domain-scrape",
+    domain: options.domain,
+    provider: options.provider,
+    maxUrls: options.maxUrls,
+    concurrency: options.concurrency,
+    waitMs: options.waitMs,
+    useBrowser: options.useBrowser,
+    maxRetries: options.maxRetries,
+    webhookUrl: options.webhookUrl,
+    metadata: options.metadata,
+  });
+
+  return { jobId: options.jobId, domain: options.domain, mode: "async" };
 }
 
 /**

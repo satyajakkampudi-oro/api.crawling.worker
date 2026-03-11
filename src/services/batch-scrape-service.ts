@@ -1,12 +1,15 @@
 import type { AppEnv } from "../types/env-types.js";
 
-import type { BatchScrapeOptions, ScrapeResult } from "../types/scrape-types.js";
+import type { BatchJobOptions } from "../types/job-types.js";
+import type { BatchJobResponse, BatchScrapeOptions, ScrapeResult } from "../types/scrape-types.js";
 import { HTTPException } from "hono/http-exception";
 
 import { resolveProviderAdapter } from "../config/provider-registry.js";
 import { resolveProviderConfigs } from "../config/providers-config.js";
 import { clampConcurrency, runConcurrent } from "../helpers/concurrency-helper.js";
-import { partitionResults } from "../helpers/scrape-result-helper.js";
+import { deriveScrapeStatus, partitionResults } from "../helpers/scrape-result-helper.js";
+import { createJobRecord } from "./job-store-service.js";
+import { deliverScrapeResult, resolveWebhookConfig } from "./webhook-delivery-service.js";
 
 /**
  * Executes a batch scrape using the selected provider and concurrency settings.
@@ -72,6 +75,97 @@ export async function runBatchScrape(
   });
 
   return results;
+}
+
+/**
+ * Persists the job record in KV and sends the message to the queue.
+ * Returns the standard async batch job response.
+ */
+export async function enqueueBatchJob(
+  env: AppEnv["Bindings"],
+  options: BatchJobOptions,
+): Promise<BatchJobResponse> {
+  await createJobRecord(env.SCRAPE_JOB_STORE, {
+    jobId: options.jobId,
+    type: "batch-scrape",
+    provider: options.provider,
+    triggeredAt: options.triggeredAt,
+    urlCount: options.urls.length,
+    ...(options.webhookUrl !== undefined && { webhookUrl: options.webhookUrl }),
+    metadata: options.metadata,
+  });
+
+  await env.SCRAPE_JOB_QUEUE.send({
+    jobId: options.jobId,
+    triggeredAt: options.triggeredAt,
+    urls: options.urls,
+    provider: options.provider,
+    concurrency: options.concurrency,
+    waitMs: options.waitMs,
+    useBrowser: options.useBrowser,
+    maxRetries: options.maxRetries,
+    webhookUrl: options.webhookUrl,
+    metadata: options.metadata,
+  });
+
+  return {
+    jobId: options.jobId,
+    mode: "async",
+    status: "queued",
+    urlCount: options.urls.length,
+    successCount: null,
+    failedCount: null,
+    results: null,
+  };
+}
+
+/**
+ * Runs a batch scrape inline, fires the webhook non-blocking if provided,
+ * and returns the standard sync batch job response.
+ */
+export async function runSyncBatchScrape(
+  ctx: ExecutionContext,
+  env: AppEnv["Bindings"],
+  options: BatchJobOptions,
+): Promise<BatchJobResponse> {
+  const results = await runBatchScrape(
+    {
+      urls: options.urls,
+      provider: options.provider,
+      concurrency: options.concurrency,
+      waitMs: options.waitMs,
+      useBrowser: options.useBrowser,
+      maxRetries: options.maxRetries,
+      metadata: options.metadata,
+    },
+    env,
+  );
+
+  if (options.webhookUrl !== undefined) {
+    const webhookConfig = resolveWebhookConfig(env);
+    ctx.waitUntil(
+      deliverScrapeResult({
+        jobId: options.jobId,
+        webhookUrl: options.webhookUrl,
+        results,
+        metadata: options.metadata,
+        triggeredAt: options.triggeredAt,
+        webhookSecret: webhookConfig.secret,
+        maxRetries: webhookConfig.maxRetries,
+        retryBaseMs: webhookConfig.retryBaseMs,
+      }),
+    );
+  }
+
+  return {
+    jobId: options.jobId,
+    mode: "sync",
+    status: deriveScrapeStatus(results),
+    urlCount: options.urls.length,
+    successCount: results.filter(r => r.markdown !== null).length,
+    failedCount: results.filter(r => r.markdown === null).length,
+    results,
+  };
 }
 
 /**

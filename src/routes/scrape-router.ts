@@ -5,13 +5,13 @@ import { HTTPException } from "hono/http-exception";
 import { timeout } from "hono/timeout";
 
 import { checkHealth } from "../handlers/health-handler.js";
+import { handleGetJob } from "../handlers/job-handler.js";
 import {
   handleBatchScrape,
   handleDomainMap,
   handleDomainScrape,
   handlePdfScrape,
   handleSingleScrape,
-
 } from "../handlers/scrape-handler.js";
 
 import { serviceAuth } from "../middlewares/service-auth.js";
@@ -29,7 +29,7 @@ scrapeRouter.post(
   handleSingleScrape,
 );
 
-// ── Batch scrape ──────────────────────────────────────────────────────────────
+//  Batch scrape
 scrapeRouter.post(
   "/batch",
   serviceAuth,
@@ -37,7 +37,7 @@ scrapeRouter.post(
   handleBatchScrape,
 );
 
-// ── Domain URL discovery ──────────────────────────────────────────────────────
+//  Domain URL discovery
 scrapeRouter.post(
   "/domain/map",
   serviceAuth,
@@ -45,7 +45,7 @@ scrapeRouter.post(
   handleDomainMap,
 );
 
-// ── Full domain scrape (always async + webhook) ───────────────────────────────
+//  Full domain scrape (always async + webhook)
 scrapeRouter.post(
   "/domain/scrape",
   serviceAuth,
@@ -53,12 +53,19 @@ scrapeRouter.post(
   handleDomainScrape,
 );
 
-// ── PDF scrape ────────────────────────────────────────────────────────────────
+//  PDF scrape
 scrapeRouter.post(
   "/pdf",
   serviceAuth,
   timeout(60_000, () => new HTTPException(408, { message: "PDF scrape request timed out" })),
   handlePdfScrape,
+);
+
+//  Job stats
+scrapeRouter.get(
+  "/jobs/:jobId",
+  serviceAuth,
+  handleGetJob,
 );
 
 export default scrapeRouter;
