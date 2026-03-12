@@ -38,8 +38,16 @@ export async function processQueueMessage(
 
   console.warn("[QUEUE] Processing message", { jobId, type: body.type ?? "batch-scrape" });
 
-  // Mark job as processing
-  await updateJobRecord(bindings.SCRAPE_JOB_STORE, jobId, { status: "processing" });
+  // Mark job as processing — retryable: if KV is unavailable no scraping has started yet.
+  try {
+    await updateJobRecord(bindings.SCRAPE_JOB_STORE, jobId, { status: "processing" });
+  }
+  catch (err: unknown) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error("[QUEUE] KV unavailable during status update — will retry", { jobId, error });
+    message.retry();
+    return;
+  }
 
   let urls: string[];
 
@@ -88,6 +96,7 @@ export async function processQueueMessage(
     const failedCount = results.length - successCount;
     const failedUrls = extractFailedUrls(results);
 
+    // KV update first — job outcome is persisted regardless of webhook result.
     await updateJobRecord(bindings.SCRAPE_JOB_STORE, jobId, {
       status,
       completedAt,
@@ -96,6 +105,10 @@ export async function processQueueMessage(
       failedUrls,
     });
 
+    message.ack();
+    console.warn("[QUEUE] Message processed", { jobId, status, resultCount: results.length });
+
+    // Webhook delivery after ack — a delivery failure cannot corrupt the job status.
     if (webhookUrl !== undefined) {
       await deliverScrapeResult({
         jobId,
@@ -108,9 +121,6 @@ export async function processQueueMessage(
         retryBaseMs: webhookConfig.retryBaseMs,
       });
     }
-
-    message.ack();
-    console.warn("[QUEUE] Message processed", { jobId, status, resultCount: results.length });
   }
   catch (err: unknown) {
     const error = err instanceof Error ? err.message : String(err);

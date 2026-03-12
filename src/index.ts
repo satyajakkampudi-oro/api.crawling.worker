@@ -1,7 +1,9 @@
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { AppEnv } from "./types/env-types.js";
 import { cors } from "hono/cors";
 
 import { HTTPException } from "hono/http-exception";
+import { isBaseException } from "./exceptions/base-exception.js";
 import factory from "./factory.js";
 import { requestId } from "./middlewares/request-id.js";
 import scrapeRouter from "./routes/scrape-router.js";
@@ -18,6 +20,18 @@ app.route("/v1", scrapeRouter);
 
 // ── Error handling ────────────────────────────────────────────────────────────
 app.onError((err, c) => {
+  if (isBaseException(err)) {
+    return c.json(
+      {
+        success: false,
+        message: err.message,
+        requestId: c.var.requestId,
+        ...(err.errData !== undefined && { errors: err.errData }),
+      },
+      err.status as ContentfulStatusCode,
+    );
+  }
+
   if (err instanceof HTTPException) {
     return c.json(
       {
@@ -69,8 +83,10 @@ export default {
       timestamp: new Date().toISOString(),
     });
 
-    for (const message of batch.messages) {
-      await processQueueMessage(message, env);
-    }
+    // Process all messages in parallel — each handles its own ack/retry internally.
+    // Promise.allSettled ensures one failing message never blocks the others.
+    await Promise.allSettled(
+      batch.messages.map(message => processQueueMessage(message, env)),
+    );
   },
 };

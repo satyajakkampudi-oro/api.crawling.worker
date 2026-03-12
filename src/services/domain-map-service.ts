@@ -129,8 +129,9 @@ async function fetchDomainUrlsFromFirecrawl(options: DomainMapOptions): Promise<
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
+    console.warn(`Error : : ${text.substring(0, 120)}`);
     throw new HTTPException(502, {
-      message: `Firecrawl map API returned ${response.status}: ${text.substring(0, 120)}`,
+      message: `Firecrawl map API returned ${response.status}`,
     });
   }
 

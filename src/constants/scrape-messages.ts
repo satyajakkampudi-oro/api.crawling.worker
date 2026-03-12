@@ -5,7 +5,13 @@ export const MSG_PDF_SCRAPED = "PDF scraped successfully.";
 export const MSG_DOMAIN_MAPPED = "Domain URLs mapped successfully.";
 export const MSG_HEALTH_OK = "api.scraping is healthy.";
 
-// Validation
+// Validation — per-endpoint error messages passed to validateRequest
+export const MSG_SINGLE_SCRAPE_VALIDATION_ERROR = "Single scrape request validation failed.";
+export const MSG_BATCH_SCRAPE_VALIDATION_ERROR = "Batch scrape request validation failed.";
+export const MSG_DOMAIN_MAP_VALIDATION_ERROR = "Domain map request validation failed.";
+export const MSG_DOMAIN_SCRAPE_VALIDATION_ERROR = "Domain scrape request validation failed.";
+export const MSG_PDF_SCRAPE_VALIDATION_ERROR = "PDF scrape request validation failed.";
+
 export const MSG_INVALID_URL = "One or more URLs are invalid.";
 export const MSG_INVALID_PROVIDER = "Unsupported provider. Use: bee | ant | firecrawl.";
 export const MSG_MISSING_WEBHOOK = "webhookUrl is required for async batch jobs.";

@@ -1,9 +1,7 @@
 import { z } from "zod";
 
 export const pdfScrapeSchema = z.object({
-  url: z.string().url("Must be a valid PDF URL"),
-  maxRetries: z.number().int().min(0).max(5).optional().default(2),
-  timeoutMs: z.number().int().min(1_000).max(60_000).optional().default(30_000),
+  url: z.string().url("Must be a valid URL pointing to a PDF file"),
   metadata: z
     .record(z.unknown())
     .optional()

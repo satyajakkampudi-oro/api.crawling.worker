@@ -1,31 +1,37 @@
 import type { Context } from "hono";
 import type { AppEnv } from "../types/env-types.js";
 
+import type { BatchScrapeInput } from "../validations/schema/v-batch-scrape-schema.js";
+import type { DomainMapInput, DomainScrapeInput } from "../validations/schema/v-domain-map-schema.js";
+import type { PdfScrapeInput } from "../validations/schema/v-pdf-scrape-schema.js";
+import type { SingleScrapeInput } from "../validations/schema/v-single-scrape-schema.js";
+
 import {
+  MSG_BATCH_SCRAPE_VALIDATION_ERROR,
+  MSG_DOMAIN_MAP_VALIDATION_ERROR,
   MSG_DOMAIN_MAPPED,
+  MSG_DOMAIN_SCRAPE_VALIDATION_ERROR,
+  MSG_PDF_SCRAPE_VALIDATION_ERROR,
   MSG_PDF_SCRAPED,
   MSG_SCRAPE_COMPLETE,
   MSG_SCRAPE_QUEUED,
+  MSG_SINGLE_SCRAPE_VALIDATION_ERROR,
 } from "../constants/scrape-messages.js";
 
 import { determineBatchMode, enqueueBatchJob, runSyncBatchScrape } from "../services/batch-scrape-service.js";
 import { enqueueDomainJob, mapDomainUrls } from "../services/domain-map-service.js";
-import { scrapePdfUrl } from "../services/pdf-scrape-service.js";
 import { resolveConcurrency, resolveSingleProvider, scrapeSingleUrl } from "../services/single-scrape-service.js";
 
 import { sendResponse } from "../utils/send-response.js";
+import { isPdfUrl } from "../utils/url-utils.js";
 
-import { batchScrapeSchema } from "../validations/schema/v-batch-scrape-schema.js";
-import { domainMapSchema, domainScrapeSchema } from "../validations/schema/v-domain-map-schema.js";
-import { pdfScrapeSchema } from "../validations/schema/v-pdf-scrape-schema.js";
-import { singleScrapeSchema } from "../validations/schema/v-single-scrape-schema.js";
 import { validateRequest } from "../validations/validate-request.js";
 
 //  Single URL scrape
-
 export async function handleSingleScrape(c: Context<AppEnv>): Promise<Response> {
-  const body = await validateRequest(await c.req.json(), singleScrapeSchema);
-  const provider = resolveSingleProvider(body.provider, c.env.DEFAULT_PROVIDER);
+  const body = await validateRequest<SingleScrapeInput>("single-scrape", await c.req.json(), MSG_SINGLE_SCRAPE_VALIDATION_ERROR);
+  // PDF URLs must always use Firecrawl — it is the only provider with native PDF → markdown support.
+  const provider = isPdfUrl(body.url) ? "firecrawl" : resolveSingleProvider(body.provider, c.env.DEFAULT_PROVIDER);
 
   const result = await scrapeSingleUrl(
     { url: body.url, provider, waitMs: body.waitMs ?? 3000, useBrowser: body.useBrowser, maxRetries: body.maxRetries ?? 2, metadata: body.metadata },
@@ -38,7 +44,7 @@ export async function handleSingleScrape(c: Context<AppEnv>): Promise<Response> 
 //  Batch scrape
 
 export async function handleBatchScrape(c: Context<AppEnv>): Promise<Response> {
-  const body = await validateRequest(await c.req.json(), batchScrapeSchema);
+  const body = await validateRequest<BatchScrapeInput>("batch-scrape", await c.req.json(), MSG_BATCH_SCRAPE_VALIDATION_ERROR);
   const provider = resolveSingleProvider(body.provider, c.env.DEFAULT_PROVIDER);
   const concurrency = resolveConcurrency(body.concurrency, c.env.SCRAPINGANT_CONCURRENCY);
   const mode = determineBatchMode(body.urls.length, body.webhookUrl, c.env.SYNC_BATCH_THRESHOLD);
@@ -69,9 +75,8 @@ export async function handleBatchScrape(c: Context<AppEnv>): Promise<Response> {
 }
 
 //  Domain URL map
-
 export async function handleDomainMap(c: Context<AppEnv>): Promise<Response> {
-  const body = await validateRequest(await c.req.json(), domainMapSchema);
+  const body = await validateRequest<DomainMapInput>("domain-map", await c.req.json(), MSG_DOMAIN_MAP_VALIDATION_ERROR);
 
   const result = await mapDomainUrls(
     { domain: body.domain, maxUrls: body.maxUrls, includeSubdomains: body.includeSubdomains, apiKey: c.env.FIRECRAWL_API_KEY, timeoutMs: 20_000 },
@@ -84,7 +89,7 @@ export async function handleDomainMap(c: Context<AppEnv>): Promise<Response> {
 //  Domain scrape (always async)
 
 export async function handleDomainScrape(c: Context<AppEnv>): Promise<Response> {
-  const body = await validateRequest(await c.req.json(), domainScrapeSchema);
+  const body = await validateRequest<DomainScrapeInput>("domain-scrape", await c.req.json(), MSG_DOMAIN_SCRAPE_VALIDATION_ERROR);
   const provider = resolveSingleProvider(body.provider, c.env.DEFAULT_PROVIDER);
   const jobId = crypto.randomUUID();
   const triggeredAt = new Date().toISOString();
@@ -106,12 +111,14 @@ export async function handleDomainScrape(c: Context<AppEnv>): Promise<Response> 
   return sendResponse(c, 202, MSG_SCRAPE_QUEUED, data);
 }
 
-//  PDF scrape
-
+//  PDF scrape — provider is always Firecrawl (only provider with native PDF → markdown support)
 export async function handlePdfScrape(c: Context<AppEnv>): Promise<Response> {
-  const body = await validateRequest(await c.req.json(), pdfScrapeSchema);
+  const body = await validateRequest<PdfScrapeInput>("pdf-scrape", await c.req.json(), MSG_PDF_SCRAPE_VALIDATION_ERROR);
 
-  const result = await scrapePdfUrl({ url: body.url, maxRetries: body.maxRetries, timeoutMs: body.timeoutMs, metadata: body.metadata });
+  const result = await scrapeSingleUrl(
+    { url: body.url, provider: "firecrawl", waitMs: 0, useBrowser: false, maxRetries: 0, metadata: body.metadata },
+    c.env,
+  );
 
   return sendResponse(c, 200, MSG_PDF_SCRAPED, result);
 }
