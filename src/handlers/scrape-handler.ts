@@ -17,6 +17,7 @@ import {
   MSG_SCRAPE_QUEUED,
   MSG_SINGLE_SCRAPE_VALIDATION_ERROR,
 } from "../constants/scrape-messages.js";
+import BadGatewayException from "../exceptions/bad-gateway-exception.js";
 
 import { determineBatchMode, enqueueBatchJob, runSyncBatchScrape } from "../services/batch-scrape-service.js";
 import { enqueueDomainJob, mapDomainUrls } from "../services/domain-map-service.js";
@@ -37,6 +38,10 @@ export async function handleSingleScrape(c: Context<AppEnv>): Promise<Response> 
     { url: body.url, provider, waitMs: body.waitMs ?? 3000, useBrowser: body.useBrowser, maxRetries: body.maxRetries ?? 2, metadata: body.metadata },
     c.env,
   );
+
+  if (result.error !== null) {
+    throw BadGatewayException(result.error);
+  }
 
   return sendResponse(c, 200, MSG_SCRAPE_COMPLETE, result);
 }
@@ -71,6 +76,11 @@ export async function handleBatchScrape(c: Context<AppEnv>): Promise<Response> {
   }
 
   const data = await runSyncBatchScrape(c.executionCtx, c.env, jobOptions);
+
+  if (data.status === "failed") {
+    throw BadGatewayException("All URLs failed to scrape.");
+  }
+
   return sendResponse(c, 200, MSG_SCRAPE_COMPLETE, data);
 }
 
@@ -119,6 +129,10 @@ export async function handlePdfScrape(c: Context<AppEnv>): Promise<Response> {
     { url: body.url, provider: "firecrawl", waitMs: 0, useBrowser: false, maxRetries: 0, metadata: body.metadata },
     c.env,
   );
+
+  if (result.error !== null) {
+    throw BadGatewayException(result.error);
+  }
 
   return sendResponse(c, 200, MSG_PDF_SCRAPED, result);
 }

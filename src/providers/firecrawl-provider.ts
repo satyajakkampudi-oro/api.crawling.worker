@@ -20,10 +20,11 @@ export async function scrapeUrlWithFirecrawl(options: ProviderScrapeOptions): Pr
   const { url, apiKey, timeoutMs } = options;
   const startedAt = Date.now();
   const client = new Firecrawl({ apiKey });
+  const isPdf = url.toLowerCase().endsWith(".pdf");
 
   try {
     const raw = await withTimeout(
-      client.scrape(url, { formats: ["markdown"] }),
+      client.scrape(url, { formats: ["markdown"], ...(isPdf && { parsePDF: true }) }),
       timeoutMs,
     );
 

@@ -19,7 +19,7 @@ app.route("/v1", scrapeRouter);
 
 app.post("/webhook", async (c) => {
   const { body } = await c.req.json();
-  console.warn(body)
+  console.warn(body);
   return c.json({ success: true });
 });
 
