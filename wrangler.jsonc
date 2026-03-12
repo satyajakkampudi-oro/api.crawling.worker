@@ -1,103 +1,116 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "api-scraping",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-09-23",
-  "compatibility_flags": ["nodejs_compat"],
-  "env": {
-    "development": {
-      "name": "dev-api-scraping",
-      "kv_namespaces": [
-        {
-          "binding": "SCRAPE_JOB_STORE",
-          "id": "dev-scrape-job-store"
-        }
-      ],
-      "vars": {
-        "ENVIRONMENT": "development",
-        "DEFAULT_PROVIDER": "ant",
-        "SYNC_BATCH_THRESHOLD": "3",
-        "SCRAPINGANT_BASE_URL": "https://api.scrapingant.com",
-        "SCRAPINGBEE_CONCURRENCY": "1",
-        "SCRAPINGBEE_WAIT_MS": "3000",
-        "SCRAPINGBEE_MAX_RETRIES": "2",
-        "SCRAPINGANT_CONCURRENCY": "1",
-        "SCRAPINGANT_MAX_RETRIES": "3",
-        "FIRECRAWL_MAX_CONCURRENCY": "5",
-        "FIRECRAWL_POLL_INTERVAL_MS": "2000",
-        "WEBHOOK_MAX_RETRIES": "3",
-        "WEBHOOK_RETRY_BASE_MS": "2000"
-      },
-      "observability": {
-        "logs": {
-          "enabled": true,
-          "head_sampling_rate": 1,
-          "invocation_logs": true,
-          "persist": true
-        }
-      },
-      "queues": {
-        "producers": [
-          {
-            "queue": "dev-scrape-job-queue",
-            "binding": "SCRAPE_JOB_QUEUE"
-          }
-        ],
-        "consumers": [
-          {
-            "queue": "dev-scrape-job-queue",
-            "max_batch_size": 10,
-            "max_batch_timeout": 30
-          }
-        ]
-      }
-    },
-    "staging": {
-      "name": "staging-api-scraping",
-      "kv_namespaces": [
-        {
-          "binding": "SCRAPE_JOB_STORE",
-          "id": "staging-scrape-job-store"
-        }
-      ],
-      "vars": {
-        "ENVIRONMENT": "staging",
-        "DEFAULT_PROVIDER": "ant",
-        "SYNC_BATCH_THRESHOLD": "3",
-        "SCRAPINGANT_BASE_URL": "https://api.scrapingant.com",
-        "SCRAPINGBEE_CONCURRENCY": "1",
-        "SCRAPINGBEE_WAIT_MS": "3000",
-        "SCRAPINGBEE_MAX_RETRIES": "2",
-        "SCRAPINGANT_CONCURRENCY": "1",
-        "SCRAPINGANT_MAX_RETRIES": "3",
-        "FIRECRAWL_MAX_CONCURRENCY": "5",
-        "FIRECRAWL_POLL_INTERVAL_MS": "2000",
-        "WEBHOOK_MAX_RETRIES": "3",
-        "WEBHOOK_RETRY_BASE_MS": "2000"
-      },
-      "observability": {
-        "logs": {
-          "enabled": true,
-          "head_sampling_rate": 1,
-          "invocation_logs": true,
-          "persist": true
-        }
-      },
-      "queues": {
-        "producers": [
-          {
-            "queue": "staging-scrape-job-queue",
-            "binding": "SCRAPE_JOB_QUEUE"
-          }
-        ],
-        "consumers": [
-          {
-            "queue": "staging-scrape-job-queue",
-            "max_batch_size": 10,
-            "max_batch_timeout": 30
-          }
-        ]
-      }
-    }
-  }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "api-scraping",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-09-23",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"env": {
+		"development": {
+			"name": "dev-api-scraping",
+			"kv_namespaces": [
+				{
+					"binding": "SCRAPE_JOB_STORE",
+					"id": "28f658dc2ef64b999d37138a7d95e1c5"
+				}
+			],
+			"vars": {
+				"ENVIRONMENT": "development",
+				"DEFAULT_PROVIDER": "ant",
+				"SYNC_BATCH_THRESHOLD": "3",
+				"SCRAPINGANT_BASE_URL": "https://api.scrapingant.com",
+				"SCRAPINGBEE_CONCURRENCY": "1",
+				"SCRAPINGBEE_WAIT_MS": "3000",
+				"SCRAPINGBEE_MAX_RETRIES": "2",
+				"SCRAPINGANT_CONCURRENCY": "1",
+				"SCRAPINGANT_MAX_RETRIES": "3",
+				"FIRECRAWL_MAX_CONCURRENCY": "5",
+				"FIRECRAWL_POLL_INTERVAL_MS": "2000",
+				"WEBHOOK_MAX_RETRIES": "3",
+				"WEBHOOK_RETRY_BASE_MS": "2000"
+			},
+			"observability": {
+				"logs": {
+					"enabled": true,
+					"head_sampling_rate": 1,
+					"invocation_logs": true,
+					"persist": true
+				}
+			},
+			"queues": {
+				"producers": [
+					{
+						"queue": "dev-scrape-job-queue",
+						"binding": "SCRAPE_JOB_QUEUE"
+					}
+				],
+				"consumers": [
+					{
+						"queue": "dev-scrape-job-queue",
+						"max_batch_size": 10,
+						"max_batch_timeout": 30
+					}
+				]
+			}
+		},
+		"staging": {
+			"name": "staging-api-scraping",
+			"routes": [
+				{
+					"pattern": "staging-api-scraping.satya.dev",
+					"zone_name": "satya.dev"
+				},
+				{
+					"pattern": "staging-api-scraping.satya.dev",
+					"custom_domain": true,
+					"zone_name": "satya.dev"
+				}
+			],
+			"kv_namespaces": [
+				{
+					"binding": "SCRAPE_JOB_STORE",
+					"id": "9604322fa1754ac7ac5e7e69f8b9f43f"
+				}
+			],
+			"vars": {
+				"ENVIRONMENT": "staging",
+				"DEFAULT_PROVIDER": "ant",
+				"SYNC_BATCH_THRESHOLD": "3",
+				"SCRAPINGANT_BASE_URL": "https://api.scrapingant.com",
+				"SCRAPINGBEE_CONCURRENCY": "1",
+				"SCRAPINGBEE_WAIT_MS": "3000",
+				"SCRAPINGBEE_MAX_RETRIES": "2",
+				"SCRAPINGANT_CONCURRENCY": "1",
+				"SCRAPINGANT_MAX_RETRIES": "3",
+				"FIRECRAWL_MAX_CONCURRENCY": "5",
+				"FIRECRAWL_POLL_INTERVAL_MS": "2000",
+				"WEBHOOK_MAX_RETRIES": "3",
+				"WEBHOOK_RETRY_BASE_MS": "2000"
+			},
+			"observability": {
+				"logs": {
+					"enabled": true,
+					"head_sampling_rate": 1,
+					"invocation_logs": true,
+					"persist": true
+				}
+			},
+			"queues": {
+				"producers": [
+					{
+						"queue": "staging-scrape-job-queue",
+						"binding": "SCRAPE_JOB_QUEUE"
+					}
+				],
+				"consumers": [
+					{
+						"queue": "staging-scrape-job-queue",
+						"max_batch_size": 10,
+						"max_batch_timeout": 30
+					}
+				]
+			}
+		}
+	}
 }

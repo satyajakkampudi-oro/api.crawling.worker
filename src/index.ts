@@ -11,14 +11,18 @@ import { processQueueMessage } from "./services/queue-processor.js";
 
 const app = factory.createApp();
 
-// ── Global middleware ─────────────────────────────────────────────────────────
 app.use("*", cors());
 app.use("*", requestId);
 
-// ── Routes ────────────────────────────────────────────────────────────────────
+app.get("/", c => c.redirect("/v1/health", 302));
 app.route("/v1", scrapeRouter);
 
-// ── Error handling ────────────────────────────────────────────────────────────
+app.post("/webhook", async (c) => {
+  const { body } = await c.req.json();
+  console.warn(body)
+  return c.json({ success: true });
+});
+
 app.onError((err, c) => {
   if (isBaseException(err)) {
     return c.json(
@@ -70,7 +74,7 @@ app.notFound((c) => {
   );
 });
 
-// ── Worker export ─────────────────────────────────────────────────────────────
+// Worker export
 export default {
   async fetch(request: Request, env: AppEnv["Bindings"], ctx: ExecutionContext): Promise<Response> {
     return app.fetch(request, env, ctx);
